@@ -1,0 +1,41 @@
+Northwind Tools - Engineering Handbook
+
+Tech stack
+Backend is Python with FastAPI. Frontend is TypeScript and React. PostgreSQL for
+the main database, Redis for queues and caching. Everything runs on AWS in
+containers.
+
+Branching
+Trunk based. Short lived branches off main, merged with a pull request. Branch
+names look like fix/late-job-sorting or feat/route-preview. Avoid branches that
+live longer than two days.
+
+Code review
+Every change needs one approval. Reviews are expected within one working day.
+Reviewers look at correctness first, then readability, then style. Style
+arguments that a linter could settle are not worth a review comment.
+
+Testing
+Unit tests are required for new logic. Integration tests for anything touching
+the database or an external service. We do not chase a coverage number, we chase
+tests that would actually catch a real bug.
+
+Deployment
+Merging to main deploys to staging automatically. Production deploys are manual,
+triggered from the pipeline, and anyone on the team can push one. Roll back by
+redeploying the previous tag.
+
+On call
+One week rotations, one engineer at a time. Compensated as a flat 400 euros for
+the week. Pages go to phone. If you are paged outside working hours, take the
+equivalent time back later that week.
+
+Incidents
+Anything customer facing gets an incident channel and a written summary within
+two working days. Summaries describe what happened and what changed as a result.
+They do not name individuals as causes.
+
+Documentation
+Every service has a README explaining what it does, how to run it locally, and
+who to ask. If you had to work something out by reading source code, that is a
+sign the README is missing something.
