@@ -1,0 +1,37 @@
+Northwind Tools - Customer FAQ
+
+What does the product do?
+Northwind is a scheduling tool for field service teams. You put in jobs,
+technicians and locations, and it works out who goes where and in what order.
+
+How much does it cost?
+Three plans. Starter is 19 euros per technician per month. Growth is 39 euros and
+adds route optimisation and customer notifications. Enterprise is custom priced
+and includes single sign-on, an audit log and a dedicated support contact.
+
+Is there a free trial?
+Yes, 14 days on the Growth plan, no card required. At the end of the trial the
+account drops to read-only until you pick a plan. Nothing is deleted.
+
+Refund policy
+Full refund within 30 days of your first payment, no questions asked. After that,
+monthly plans are not refunded but you can cancel any time and keep access until
+the end of the billing period. Annual plans are refunded pro rata if you cancel
+more than three months before renewal.
+
+Can I import existing data?
+Yes. CSV import for jobs, technicians and customers. There is also a migration
+service on Enterprise where the team does it for you.
+
+Which integrations exist?
+Google Calendar, Outlook, Xero, QuickBooks, Slack and a REST API. Zapier is
+available on Growth and above.
+
+Where is data stored?
+EU customers on servers in Frankfurt, everyone else in Virginia. Daily backups,
+retained for 35 days.
+
+How do I get support?
+Email support on all plans, replies within one business day. Growth adds live
+chat during European business hours. Enterprise gets a phone number and a
+four-hour response guarantee.
