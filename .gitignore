@@ -1,0 +1,17 @@
+.env
+.venv/
+venv/
+
+__pycache__/
+*.pyc
+.pytest_cache/
+.ipynb_checkpoints/
+
+.kiro/
+*.db
+*.sqlite3
+*.faiss
+chroma_db/
+
+.DS_Store
+.vscode/
