@@ -7,3 +7,4 @@ faiss-cpu==1.15.0
 fastembed==0.8.0
 langsmith==0.11.0
 langgraph==1.2.11
+ddgs==9.16.0
