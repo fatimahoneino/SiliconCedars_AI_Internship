@@ -15,6 +15,7 @@ __pycache__/
 chroma_db/
 exercise3/graph.png
 *.db
+**/faiss_index/
 
 .DS_Store
 .vscode/

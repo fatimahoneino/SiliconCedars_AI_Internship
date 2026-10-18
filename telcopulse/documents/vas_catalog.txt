@@ -1,0 +1,11 @@
+TelcoPulse Fictional VAS Catalog
+
+GameBox is a mobile gaming pass costing 2 US dollars per month. It includes casual games and weekly tournaments.
+
+GoalAlert is a sports notification service costing 1 US dollar per month. It sends live scores and match reminders.
+
+MusicDaily is a music content pass costing 2.50 US dollars per month. It includes playlists and artist updates.
+
+LearnArabic is an educational service costing 1.50 US dollars per month. It provides short daily language lessons.
+
+All names and prices are fictional. A free pass gives temporary access without changing the normal monthly price.

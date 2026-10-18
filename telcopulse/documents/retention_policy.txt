@@ -1,0 +1,11 @@
+TelcoPulse Retention Policy
+
+The records and policies in this project are fictional and intended only for demonstration.
+
+A subscriber may receive a three-day service pass after two or more failed renewals. The offer may be proposed by an operations employee without manager approval.
+
+A seven-day service pass or a discount above 20 percent requires manager approval. Offers must never be activated automatically by an AI assistant.
+
+Subscribers with an unresolved billing complaint must be referred to support before a promotional offer is proposed. Every recommendation must explain the signals that caused the churn-risk concern.
+
+A human employee must approve every customer-facing message and subscription change.

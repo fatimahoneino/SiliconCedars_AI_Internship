@@ -1,0 +1,9 @@
+TelcoPulse Customer Messaging Rules
+
+Promotional messages may be sent only to subscribers who have consented to marketing. No more than three promotional messages may be sent to one subscriber in a seven-day period.
+
+Every message must identify the service, explain the price after any free period, and include a clear opt-out instruction. Messages should use the subscriber's preferred language when a reviewed translation is available.
+
+The AI assistant may draft Arabic or English messages but cannot send them. A human employee must review and approve every draft before use.
+
+Do not place phone numbers, names, payment details, or other personal information in model prompts or public traces.
