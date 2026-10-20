@@ -1,0 +1,1 @@
+"""TelcoPulse AI portfolio project."""

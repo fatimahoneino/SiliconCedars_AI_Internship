@@ -1,0 +1,9 @@
+TelcoPulse Support Playbook
+
+A failed renewal normally means the mobile balance was insufficient when the service attempted to renew. Support should first explain the failure and ask the subscriber to verify their balance.
+
+An unresolved complaint takes priority over retention marketing. Route billing complaints to billing support and technical service problems to technical support.
+
+Churn risk is considered low from 0 to 39, medium from 40 to 69, and high from 70 to 100. The score is a fictional demonstration value, not a validated prediction.
+
+Never promise that an offer is guaranteed. Retention recommendations require human review, and an AI assistant must not make account changes.
