@@ -8,14 +8,13 @@ __pycache__/
 .ipynb_checkpoints/
 
 .kiro/
+.vscode/
+.DS_Store
+
+# generated locally, rebuilt automatically on first run
 *.db
 *.sqlite3
 *.faiss
 **/faiss_index/
 chroma_db/
 exercise3/graph.png
-*.db
-**/faiss_index/
-
-.DS_Store
-.vscode/

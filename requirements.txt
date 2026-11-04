@@ -8,3 +8,4 @@ fastembed==0.8.0
 langsmith==0.11.0
 langgraph==1.2.11
 ddgs==9.16.0
+streamlit==1.62.0
