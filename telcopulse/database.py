@@ -122,6 +122,11 @@ def execute_select(sql: str):
         raise ValueError("Only one read-only SELECT query is allowed.")
 
     init_db()
-    with sqlite3.connect(DB_PATH) as conn:
+    # Second safety layer: even if a bad query slipped past the check above,
+    # the connection itself is read-only, so SQLite would refuse to write.
+    conn = sqlite3.connect(f"file:{DB_PATH.as_posix()}?mode=ro", uri=True)
+    try:
         conn.row_factory = sqlite3.Row
         return [dict(row) for row in conn.execute(sql).fetchall()]
+    finally:
+        conn.close()

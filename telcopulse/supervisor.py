@@ -1,3 +1,4 @@
+import re
 import sys
 import time
 
@@ -21,18 +22,31 @@ ROUTES = {
 }
 
 
+def has_word(text, word):
+    # \b = word boundary. Long words only need a boundary at the start so that
+    # "subscriber" also matches "subscribers". Short words like "hi" need a
+    # boundary at both ends, otherwise they match inside "sushi" or "highest".
+    pattern = rf"\b{re.escape(word)}"
+    if len(word) <= 3:
+        pattern += r"\b"
+    return re.search(pattern, text) is not None
+
+
 def route_node(state: TelcoPulseState):
     question = state["messages"][-1].content
     lowered = question.lower()
+
+    # First try cheap keyword rules. The order matters: the first match wins.
+    # Only if nothing matches do we spend a model call on routing.
     keyword_routes = [
         ("chart", ("chart", "graph", "plot", "visualize", "visualise")),
-        ("research", ("research", "latest", "current", "web search", "market trend")),
+        ("research", ("research", "latest", "web search", "market trend")),
         ("rag", ("policy", "allowed", "permitted", "compliance", "rule", "approved offer")),
         ("sql", ("subscriber", "subscription", "churn risk", "failed renewal", "engagement score")),
-        ("conversation", ("draft", "remember", "recall", "hello", "hi ", "thank")),
+        ("conversation", ("draft", "remember", "recall", "hello", "hi", "thank")),
     ]
     choice = next(
-        (route for route, words in keyword_routes if any(word in lowered for word in words)),
+        (route for route, words in keyword_routes if any(has_word(lowered, word) for word in words)),
         "",
     )
     if not choice:
@@ -55,6 +69,7 @@ def route_node(state: TelcoPulseState):
 
 
 def run_with_retries(function, *args):
+    # try once, then retry up to MAX_RETRIES times before giving up
     last_error = None
     for attempt in range(MAX_RETRIES + 1):
         try:
