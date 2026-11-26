@@ -38,9 +38,16 @@ def classify(state: State):
         )
     )
 
-    response = llm.invoke(
-        [system_message, user_message]
-    )
+    try:
+        response = llm.invoke([system_message, user_message])
+    except Exception as error:
+        # Save the error in the state; the route function then stops the thread.
+        return {
+            "kind": "error",
+            "messages": [AIMessage(content=f"The classify step failed: {error}")],
+            "path": state.get("path", []) + ["classify"],
+            "error": str(error),
+        }
 
     kind = response.content.strip().lower()
     if kind not in {"math","factual","chat"}:
@@ -141,45 +148,51 @@ def calculate(state: State):
             "error": str(error),
         }
 
-def answer(state: State):
-    system_message = SystemMessage(
-        content=(
-            "Answer the user's factual question clearly. "
-            "Use at most two sentences."
+def reply_with_model(state: State, node_name: str, instructions: str):
+    """Shared code for the answer and chat nodes.
+
+    If the model call fails, the error is saved in the state and the
+    thread stops at this node with a clear message instead of crashing.
+    """
+    path = state.get("path", []) + [node_name]
+    try:
+        response = llm.invoke(
+            [SystemMessage(content=instructions), *state["messages"]]
         )
+    except Exception as error:
+        message = f"The {node_name} step failed: {error}"
+        return {
+            "messages": [AIMessage(content=message)],
+            "path": path,
+            "error": str(error),
+        }
+
+    return {"messages": [response], "path": path, "error": ""}
+
+
+def answer(state: State):
+    return reply_with_model(
+        state,
+        "answer",
+        "Answer the user's factual question clearly. Use at most two sentences.",
     )
 
-    response = llm.invoke(
-        [system_message, *state["messages"]]
-    )
-
-    return {
-        "messages": [response],
-        "path": state.get("path", []) + ["answer"],
-        "error": "",
-    }
 
 def chat(state: State):
-    system_message = SystemMessage(
-        content=(
-            "Have a warm and brief conversation with the user. "
-            "Use at most two sentences."
-        )
+    return reply_with_model(
+        state,
+        "chat",
+        "Have a warm and brief conversation with the user. "
+        "Use the earlier conversation when it is relevant. "
+        "Use at most two sentences.",
     )
-
-    response = llm.invoke(
-        [system_message, *state["messages"]]
-    )
-
-    return {
-        "messages": [response],
-        "path": state.get("path", []) + ["chat"],
-        "error": "",
-    }
 
 def route(
     state: State,
-) -> Literal["calculate", "answer", "chat"]:
+) -> Literal["calculate", "answer", "chat", "stop"]:
+    if state.get("error"):
+        return "stop"
+
     if state["kind"] == "math":
         return "calculate"
 
@@ -206,6 +219,7 @@ def build_graph():
             "calculate": "calculate",
             "answer": "answer",
             "chat": "chat",
+            "stop": END,
         },
     )
 

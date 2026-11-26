@@ -43,7 +43,7 @@ def get_app():
 def main():
     st.set_page_config(page_title="TelcoPulse AI", page_icon="📡", layout="wide")
     st.title("TelcoPulse AI")
-    st.caption("Multilingual Telecom Retention & Operations Copilot")
+    st.caption("Multilingual telecom retention and operations assistant")
     st.info("Portfolio prototype using fictional subscriber records. All customer-facing actions require human approval.")
     app = get_app()
     if "thread_id" not in st.session_state:
