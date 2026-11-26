@@ -1,23 +1,3 @@
-from langchain_core.messages import HumanMessage
-from langchain_groq import ChatGroq
-
-from common.config import load_config
-from exercise4.tools import ALL_TOOLS
-
-MODEL = "openai/gpt-oss-20b"
-
-
-def main():
-    load_config()
-    llm = ChatGroq(model=MODEL).bind_tools(ALL_TOOLS)
-
-    reply = llm.invoke(
-        [HumanMessage("Translate 'good morning' to Japanese.")]
-    )
-
-    print("tool_calls:", reply.tool_calls)
-    print("content:", reply.content)
-
 import sys
 import time
 
@@ -33,10 +13,15 @@ MAX_STEPS = 6
 SYSTEM = SystemMessage(
     "You are a helpful assistant about Japan, with access to tools. "
     "Use the translator for any Japanese translation request. "
-    "Use the search tool for current facts about Japan you are not sure of. "
+    "Use the search tool when the user asks to search, or asks about news, "
+    "forecasts, or anything current about Japan. "
     "Use the prefecture lookup for questions about a specific prefecture "
     "or Japanese city, such as its capital or population. "
-    "When a question needs several steps, call the tools one after another."
+    "When a question needs several steps, call the tools one after another. "
+    "Call each tool at most once per question, then answer with what it returned. "
+    "When you use search results, answer briefly, use only facts from the results, "
+    "and list the source links. Do not add dates or numbers that are not in the results. "
+    "If a tool reports an error, tell the user which tool failed."
 )
 
 TOOLS_BY_NAME = {t.name: t for t in ALL_TOOLS}
@@ -56,16 +41,20 @@ def run_agent(question, llm):
 
         for call in reply.tool_calls:
             name = call["name"]
-            used.append(name)
             tool = TOOLS_BY_NAME.get(name)
 
-            if tool is None:
+            if name in used:
+                # Each tool runs at most once per question.
+                result = f"You already called {name}. Use its earlier result and answer now."
+            elif tool is None:
                 result = f"unknown tool {name}"
             else:
+                used.append(name)
                 try:
                     result = tool.invoke(call["args"])
                 except Exception as exc:
-                    result = f"{name} failed: {exc}"
+                    # Report the failing tool by name and let the model continue.
+                    result = f"Tool '{name}' failed: {exc}"
 
             messages.append(
                 ToolMessage(content=str(result), tool_call_id=call["id"])
@@ -84,7 +73,7 @@ def main():
     questions = [
         "Translate 'Where is the nearest train station?' to Japanese.",
         "What is the capital of Osaka prefecture and its population?",
-        "What is the best time of year to see cherry blossoms in Japan?",
+        "Search the web for the latest cherry blossom forecast in Japan.",
         "Translate 'Thank you very much' to Japanese, then tell me the "
         "capital of Hokkaido.",
         "Tell me a one-line joke about sushi.",

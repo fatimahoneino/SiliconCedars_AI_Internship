@@ -1,4 +1,5 @@
 import json
+import os
 import re
 from pathlib import Path
 from typing import TypedDict
@@ -8,13 +9,14 @@ from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langchain_groq import ChatGroq
 from langgraph.graph import END, START, StateGraph
 
-from telcopulse.database import describe_schema, execute_select
+from telcopulse.database import describe_schema, execute_select, get_backend
 
 
 MODEL = "openai/gpt-oss-20b"
 DOCS_DIR = Path(__file__).parent / "documents"
 INDEX_DIR = Path(__file__).parent / "faiss_index"
 CHART_TYPES = {"bar", "line", "pie"}
+OTHER_CHART_TYPES = {"radar", "scatter", "bubble", "doughnut", "donut", "area", "histogram", "heatmap", "polar"}
 PALETTE = [
     "rgba(34,211,238,0.75)",
     "rgba(59,130,246,0.75)",
@@ -39,41 +41,109 @@ def extract_sql(text: str):
     fenced = re.search(r"```(?:sql)?\s*(.+?)```", text, re.DOTALL | re.IGNORECASE)
     return fenced.group(1).strip() if fenced else text.strip()
 
+CHANGE_WORDS = re.compile(
+    r"\b(delete|remove|drop|erase|wipe|truncate|update|insert|add|change|modify|edit|alter|reset)\b",
+    re.IGNORECASE,
+)
+
+
 def sql_agent(question: str):
+    # Guard on the request itself: this agent only reads data.
+    if CHANGE_WORDS.search(question):
+        return {
+            "answer": "This request was refused. The SQL agent is read-only: it can only "
+                      "read data with one SELECT query. Nothing was changed.",
+            "sources": [],
+            "rows": [],
+        }
+
     llm = get_llm()
+    dialect = "PostgreSQL" if get_backend() == "postgresql" else "SQLite"
     drafted = llm.invoke([
         SystemMessage(
-            "Write one SQLite read-only SELECT query that answers the question. "
+            f"Write one {dialect} read-only SELECT query that answers the question. "
             "Return only SQL with no markdown or explanation. Subscriber records "
-            "are fictional. Use joins when service details are needed.\n\n"
+            "are fictional. Use joins when service details are needed. "
+            "Each row in subscriptions is one service of one subscriber, so compare "
+            "failed_renewals per row unless the user asks for a total.\n\n"
             f"Schema:\n{describe_schema()}"
         ),
         HumanMessage(question),
     ]).content
     sql = extract_sql(drafted)
 
+    if not sql.lower().lstrip("(").startswith(("select", "with")):
+        # The model refused to write a query (for example for a delete request).
+        return {
+            "answer": "This request was refused. I can only read data with one SELECT query. Nothing was changed.",
+            "sources": [],
+            "rows": [],
+        }
+
     try:
         rows = execute_select(sql)
+    except ValueError as exc:
+        # Blocked by the read-only check.
+        return {"answer": f"This request was refused: {exc} Nothing was changed.", "sources": [sql], "rows": []}
     except Exception as exc:
-        return {"answer": f"The database request could not be completed: {exc}", "sources": [sql]}
+        # Report the database error message (for example a wrong column name).
+        return {"answer": f"The database request could not be completed: {exc}", "sources": [sql], "rows": []}
     if not rows:
-        return {"answer": "The database query returned no matching subscribers.", "sources": [sql]}
+        return {"answer": "The database query returned no matching subscribers.", "sources": [sql], "rows": []}
 
     explained = llm.invoke([
         SystemMessage(
             "Explain the fictional telecom query result in two or three clear sentences. "
-            "Quote relevant IDs and numbers. Do not recommend contacting customers automatically."
+            "Quote relevant IDs and numbers exactly as they appear in the rows. "
+            "Do not recommend contacting customers automatically."
         ),
-        HumanMessage(f"Question: {question}\nSQL: {sql}\nRows: {json.dumps(rows)}"),
+        HumanMessage(f"Question: {question}\nSQL: {sql}\nRows: {json.dumps(rows, default=str)}"),
     ]).content
-    return {"answer": explained, "sources": [sql]}
+    return {"answer": explained, "sources": [sql], "rows": rows}
+
+
+def search_provider():
+    return "tavily" if os.getenv("TAVILY_API_KEY") else "duckduckgo"
 
 
 def web_search(query: str, max_results=4):
+    """Tavily when TAVILY_API_KEY is set, otherwise DuckDuckGo (no key needed).
+
+    Both return a list of {"title", "body", "href"} dictionaries.
+    """
+    if search_provider() == "tavily":
+        import httpx
+
+        response = httpx.post(
+            "https://api.tavily.com/search",
+            headers={"Authorization": f"Bearer {os.getenv('TAVILY_API_KEY')}"},
+            json={"query": query, "max_results": max_results},
+            timeout=15,
+        )
+        response.raise_for_status()
+        return [
+            {"title": r.get("title", ""), "body": r.get("content", ""), "href": r.get("url", "")}
+            for r in response.json().get("results", [])
+        ]
+
+    import time
+
     from ddgs import DDGS
 
-    with DDGS() as ddgs:
-        return list(ddgs.text(query, max_results=max_results, timeout=8))
+    # DuckDuckGo sometimes refuses a request for a moment, so try twice.
+    last_error = None
+    for attempt in range(2):
+        try:
+            with DDGS() as ddgs:
+                hits = list(ddgs.text(query, max_results=max_results, timeout=8))
+            if hits:
+                return hits
+        except Exception as exc:
+            last_error = exc
+        time.sleep(1.5)
+    if last_error:
+        raise last_error
+    return []
 
 
 class ResearchState(TypedDict, total=False):
@@ -105,8 +175,11 @@ def research_search(state: ResearchState):
         hits = []
     findings = []
     sources = []
-    for hit in hits:
-        findings.append(f"{hit.get('title', 'Untitled')}: {hit.get('body', '')}")
+    for number, hit in enumerate(hits, start=1):
+        findings.append(
+            f"[{number}] {hit.get('title', 'Untitled')}: {hit.get('body', '')} "
+            f"(source: {hit.get('href', 'unknown')})"
+        )
         if hit.get("href"):
             sources.append(hit["href"])
     return {
@@ -126,13 +199,19 @@ def research_retry(state: ResearchState):
 def research_writer(state: ResearchState):
     if not state.get("findings"):
         return {
-            "answer": "No public web results were available for this research request.",
+            "answer": (
+                "No public web results were found for this request, even after a retry "
+                f"with a simpler query ('{state.get('query', '')}')."
+            ),
             "trail": state.get("trail", []) + ["research:writer"],
         }
     answer = get_llm(temperature=0.2).invoke([
         SystemMessage(
             "Write a concise report using only the supplied public findings. "
-            "Do not invent claims. State that sources should be verified before business use."
+            "Cite each claim with its finding number, like [1] or [2]. "
+            "Do not invent claims. If a finding is not related to the question, ignore it. "
+            "End with a 'Sources' list of the URLs you used, and say that sources "
+            "should be verified before business use."
         ),
         HumanMessage(f"Question: {state['question']}\n\nFindings:\n{state['findings']}"),
     ]).content
@@ -171,28 +250,45 @@ def research_team(question: str):
     }
 
 
-def chart_agent(question: str):
+def chart_agent(question: str, rows=None):
+    """Build a Chart.js spec.
+
+    The data comes from the user's message, or from SQL rows when the
+    supervisor sends the SQL result on to this agent.
+    Bad input gets a clear answer instead of an error, because retrying would not help.
+    """
+    request = question
+    if rows:
+        request += f"\n\nUse these database rows as the data:\n{json.dumps(rows, default=str)}"
     parsed = extract_json(get_llm().invoke([
         SystemMessage(
             "Extract chart data as JSON with chart_type, title, labels, and values. "
-            "chart_type must be bar, line, or pie. labels must be strings and values numbers. "
-            "Return JSON only."
+            "chart_type is exactly the chart type the user asked for, even if it is unusual "
+            "(use bar only if the user does not name a type). "
+            "labels must be strings and values numbers. Return JSON only."
         ),
-        HumanMessage(question),
+        HumanMessage(request),
     ]).content)
     chart_type = str(parsed.get("chart_type", "bar")).lower()
+    # Double check in code: if the user named an unsupported type, do not replace it silently.
+    asked = re.search(r"\b(\w+)\s+(?:chart|graph|plot)\b", question.lower())
+    if asked and asked.group(1) in OTHER_CHART_TYPES:
+        chart_type = asked.group(1)
     title = str(parsed.get("title", "Telecom chart"))
     labels = parsed.get("labels", [])
     values = parsed.get("values", [])
 
+    # These are problems with the user's request, so retrying would not help.
+    # Return a clear message instead of raising an error.
     if chart_type not in CHART_TYPES:
-        raise ValueError("Only bar, line, and pie charts are supported.")
-    if not labels or len(labels) != len(values):
-        raise ValueError("Chart labels and values must have equal non-zero lengths.")
-    if not all(isinstance(label, str) for label in labels):
-        raise ValueError("Chart labels must be text.")
+        return {"answer": f"'{chart_type}' charts are not supported. Supported types: bar, line, pie."}
+    if not labels or not values:
+        return {"answer": "No data is available to chart. Please give labels and numbers, e.g. 'Lebanon 2, Jordan 3'."}
+    if len(labels) != len(values):
+        return {"answer": "Each label needs exactly one number. Please check the data."}
     if not all(isinstance(value, (int, float)) and not isinstance(value, bool) for value in values):
-        raise ValueError("Chart values must be numbers.")
+        return {"answer": "Chart values must be numbers."}
+    labels = [str(label) for label in labels]
 
     colours = [PALETTE[index % len(PALETTE)] for index in range(len(values))]
     chart = {
@@ -251,6 +347,8 @@ def get_store():
 
 def rag_agent(question: str):
     hits = get_store().similarity_search(question, k=3)
+    if not hits:
+        return {"answer": "No relevant internal policy information was found.", "sources": []}
     context = "\n\n".join(
         f"[{hit.metadata['source']}]\n{hit.page_content}" for hit in hits
     )
@@ -272,9 +370,12 @@ def conversation_agent(question: str, history: list):
     answer = get_llm(temperature=0.3).invoke([
         SystemMessage(
             "You are TelcoPulse AI, a portfolio prototype for fictional telecom operations. "
-            "Reply briefly in the user's language. You may draft English, Modern Standard Arabic, "
-            "or simple Lebanese Arabic messages, but clearly mark customer messages as drafts for "
-            "human review. Never claim to contact subscribers or change accounts. If asked about "
+            "You are talking to an operations employee, not a customer. Reply briefly in the "
+            "user's language and use the earlier conversation when it is relevant. "
+            "Only when the user asks you to write a message for a customer, draft it in English, "
+            "Modern Standard Arabic, or simple Lebanese Arabic, and start it with "
+            "'Draft for human review:'. Do not add that label to normal replies. "
+            "Never claim to contact subscribers or change accounts. If asked about "
             "capabilities, mention subscriber analytics, policy lookup, public research, and charts."
         ),
         *recent,

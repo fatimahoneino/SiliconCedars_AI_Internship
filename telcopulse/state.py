@@ -14,3 +14,5 @@ class TelcoPulseState(TypedDict, total=False):
     retries: int
     failed: bool
     elapsed_ms: float
+    then_chart: bool  # True when the SQL result should be passed on to the chart agent
+    data_rows: list[dict[str, Any]]  # rows returned by the SQL agent

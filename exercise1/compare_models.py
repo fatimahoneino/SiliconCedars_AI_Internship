@@ -26,7 +26,12 @@ def models_comparator(model_names, prompt_values):
     for name in model_names:
         llm = ChatGroq(model=name)
         start = time.time()
-        ai_msg = llm.invoke(filled_prompt)
+        try:
+            ai_msg = llm.invoke(filled_prompt)
+        except Exception as exc:
+            # Report which model failed and why, then continue with the others.
+            print(f"Model {name} failed: {exc}")
+            continue
         elapsed_ms = round((time.time() - start) * 1000, 2)
         results.append((name, ai_msg.content, elapsed_ms))
 
@@ -35,10 +40,10 @@ def models_comparator(model_names, prompt_values):
 
 if __name__ == "__main__":
     results = models_comparator(
-        ["openai/gpt-oss-20b", "openai/gpt-oss-120b"],
+        ["openai/gpt-oss-20b", "openai/gpt-oss-120b", "qwen/qwen3.8-27b", "allam-2-7b"],
         {"language": "french", "text": "I love you."},
     )
 
     for model_name, answer, elapsed_ms in results:
         print(f"\n{model_name} ({elapsed_ms} ms)")
-        print(answer)
+        print(answer.strip())
