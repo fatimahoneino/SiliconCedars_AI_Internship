@@ -1,5 +1,13 @@
 import json
+import sys
 import uuid
+from pathlib import Path
+
+# "streamlit run telcopulse/app.py" only adds the telcopulse/ folder to the
+# import path. Add the project root too, so "common" and "telcopulse" import.
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
 
 import streamlit as st
 import streamlit.components.v1 as components
